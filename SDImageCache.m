@@ -28,6 +28,7 @@ static SDImageCache *instance;
     {
         // Init the memory cache
         memCache = [[NSMutableDictionary alloc] init];
+        MD5PathCache = [[NSMutableDictionary alloc] init];
 
         // Init the disk cache
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
@@ -81,6 +82,7 @@ static SDImageCache *instance;
     [memCache release], memCache = nil;
     [diskCachePath release], diskCachePath = nil;
     [cacheInQueue release], cacheInQueue = nil;
+    [MD5PathCache release], MD5PathCache = nil;
 
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 
@@ -103,13 +105,24 @@ static SDImageCache *instance;
 
 - (NSString *)cachePathForKey:(NSString *)key
 {
-    const char *str = [key UTF8String];
-    unsigned char r[CC_MD5_DIGEST_LENGTH];
-    CC_MD5(str, (CC_LONG)strlen(str), r);
-    NSString *filename = [NSString stringWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-                          r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15]];
-
-    return [diskCachePath stringByAppendingPathComponent:filename];
+    NSString *outFileName = [MD5PathCache objectForKey:key];
+    if(outFileName == nil){
+    
+        const char *str = [key UTF8String];
+        unsigned char r[CC_MD5_DIGEST_LENGTH];
+        CC_MD5(str, (CC_LONG)strlen(str), r);
+        NSString *filename = [NSString stringWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                              r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15]];
+        
+        
+    
+        outFileName = [diskCachePath stringByAppendingPathComponent:filename];
+        [MD5PathCache setObject:outFileName forKey:key];
+        //NSLog(@"MAKE AND STORE PATH FOR KEY: %@",key);
+    }
+    //else NSLog(@"ALREADY HAVE KEY: %@",key);
+    
+    return outFileName;
 }
 
 - (void)storeKeyWithDataToDisk:(NSArray *)keyAndData
@@ -204,19 +217,24 @@ static SDImageCache *instance;
 
     if (toDisk)
     {
-        if (!data) return;
-        NSArray *keyWithData;
-        if (data)
-        {
-            keyWithData = [NSArray arrayWithObjects:key, data, nil];
+        BOOL SAVE = NO;
+        
+        for (NSString* rkey in [MD5PathCache keyEnumerator]) {
+            if([rkey isEqualToString:key]){
+                SAVE = YES;
+                break;
+            }
         }
-        else
-        {
-            keyWithData = [NSArray arrayWithObjects:key, nil];
+        
+        if (SAVE) { 
+            //NSLog(@"STORING TO HARDDISK %@",key);
+            
+            NSArray *keyWithData = [NSArray arrayWithObjects:key, UIImageJPEGRepresentation(image, 0.7), nil];
+            
+            [cacheInQueue addOperation:[[[NSInvocationOperation alloc] initWithTarget:self
+                                                                             selector:@selector(storeKeyWithDataToDisk:)
+                                                                               object:keyWithData] autorelease]];
         }
-        [cacheInQueue addOperation:[[[NSInvocationOperation alloc] initWithTarget:self
-                                                                         selector:@selector(storeKeyWithDataToDisk:)
-                                                                           object:keyWithData] autorelease]];
     }
 }
 

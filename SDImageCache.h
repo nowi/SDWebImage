@@ -14,6 +14,7 @@
     NSMutableDictionary *memCache;
     NSString *diskCachePath;
     NSOperationQueue *cacheInQueue, *cacheOutQueue;
+    NSMutableDictionary *MD5PathCache;
 }
 
 + (SDImageCache *)sharedImageCache;
